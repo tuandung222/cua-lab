@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cua-lab · traces</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #161a22; --line: #242a36; --text: #e6e9ef;
+    --muted: #8b93a7; --accent: #4f8cff; --ok: #35c48a; --bad: #ff5d6c;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text); font: 13px/1.5 ui-monospace, "SF Mono", Menlo, monospace;
+    display: grid; grid-template-rows: auto 1fr auto; height: 100vh; overflow: hidden;
+  }
+  header {
+    display: flex; align-items: center; gap: 14px; padding: 10px 16px;
+    border-bottom: 1px solid var(--line); background: var(--panel); min-height: 52px;
+  }
+  .brand { font-weight: 700; letter-spacing: .5px; color: var(--accent); }
+  #headline { color: var(--text); opacity: .92; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+  #badges { display: flex; gap: 6px; }
+  .badge { border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; color: var(--muted); font-size: 11px; }
+  .badge.ok { color: var(--ok); border-color: #1d4d3a; }
+  .badge.bad { color: var(--bad); border-color: #4d1d24; }
+
+  .app { display: grid; grid-template-columns: 230px minmax(0, 1fr) 340px; min-height: 0; }
+
+  aside { border-right: 1px solid var(--line); background: var(--panel); overflow: auto; padding: 10px; }
+  aside h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin: 6px 4px 8px; }
+  .run {
+    display: block; width: 100%; text-align: left; background: transparent; color: var(--text);
+    border: 1px solid transparent; border-radius: 7px; padding: 7px 8px; margin-bottom: 4px; cursor: pointer;
+    font: inherit;
+  }
+  .run:hover { background: #1c212b; }
+  .run.on { border-color: #2f4a7a; background: #1a2231; }
+  .run small { display: block; color: var(--muted); font-size: 11px; }
+  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; }
+  .dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); }
+
+  #stage { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: #0c0e12; }
+  .toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+  .toolbar .spacer { flex: 1; }
+  button.ctl {
+    background: #1b202a; color: var(--text); border: 1px solid var(--line); border-radius: 6px;
+    padding: 5px 10px; cursor: pointer; font: inherit;
+  }
+  button.ctl:hover { border-color: #3a4557; }
+  #counter { color: var(--muted); min-width: 110px; text-align: center; }
+  #imgwrap { position: relative; display: inline-block; margin: 12px auto; max-width: calc(100% - 24px); max-height: 100%; }
+  #shot { display: block; max-width: 100%; max-height: calc(100vh - 210px); border: 1px solid var(--line); border-radius: 4px; }
+  #pins { position: absolute; inset: 0; pointer-events: none; }
+  .pin {
+    position: absolute; transform: translate(-50%, -50%); width: 22px; height: 22px; border-radius: 50%;
+    border: 2px solid #ffd166; background: rgba(255, 209, 102, .18); color: #ffd166;
+    display: grid; place-items: center; font-size: 11px; font-weight: 700;
+    box-shadow: 0 0 0 6px rgba(255, 209, 102, .12);
+  }
+  #stagewrap { overflow: auto; display: flex; justify-content: center; flex: 1; min-height: 0; }
+  #instruction { border-top: 1px solid var(--line); padding: 9px 14px; color: var(--muted); font-size: 12px; }
+  #instruction b { color: var(--text); font-weight: 600; }
+
+  #detail { border-left: 1px solid var(--line); background: var(--panel); overflow: auto; padding: 12px 14px; }
+  #detail h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin: 16px 0 6px; }
+  #detail h3:first-child { margin-top: 2px; }
+  .chip { background: #10141b; border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; margin-bottom: 5px; word-break: break-all; }
+  pre { background: #10141b; border: 1px solid var(--line); border-radius: 6px; padding: 8px; margin: 0; overflow: auto; white-space: pre-wrap; word-break: break-word; color: #c9d1e0; }
+  .muted { color: var(--muted); }
+  .meta { color: var(--muted); font-size: 11px; margin-top: 4px; }
+  footer { border-top: 1px solid var(--line); padding: 6px 14px; color: var(--muted); font-size: 11px; background: var(--panel); }
+
+  @media (max-width: 980px) {
+    body { display: block; height: auto; overflow: auto; }
+    .app { grid-template-columns: 1fr; }
+    aside { max-height: 170px; border-right: 0; border-bottom: 1px solid var(--line); }
+    #stagewrap { min-height: 340px; }
+    #shot { max-height: 58vh; }
+    #detail { border-left: 0; border-top: 1px solid var(--line); }
+  }
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand">cua-lab</div>
+    <div id="headline">loading…</div>
+    <div id="badges"></div>
+  </header>
+
+  <div class="app">
+    <aside>
+      <h2>Runs</h2>
+      <div id="runs"></div>
+    </aside>
+
+    <main id="stage">
+      <div class="toolbar">
+        <button class="ctl" id="prev">←</button>
+        <span id="counter">—</span>
+        <button class="ctl" id="next">→</button>
+        <span class="spacer"></span>
+        <button class="ctl" id="toggle">show before</button>
+      </div>
+      <div id="stagewrap">
+        <div id="imgwrap"><img id="shot" alt=""><div id="pins"></div></div>
+      </div>
+      <div id="instruction"></div>
+    </main>
+
+    <section id="detail">
+      <h3>Action</h3>
+      <div id="actions"></div>
+      <h3>Model text</h3>
+      <pre id="text">—</pre>
+      <h3>Usage</h3>
+      <pre id="usage">{}</pre>
+      <h3>Results</h3>
+      <pre id="results">[]</pre>
+    </section>
+  </div>
+
+  <footer>←/→ navigate · b toggle before/after</footer>
+
+<script>
+const S = { runs: [], run: null, meta: null, steps: [], i: 0, before: false };
+const $ = (s) => document.querySelector(s);
+const esc = (v) => String(v ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+async function boot() {
+  try {
+    const r = await fetch('runs.json', { cache: 'no-store' });
+    S.runs = r.ok ? await r.json() : [];
+  } catch (_) { S.runs = []; }
+  renderRuns();
+  if (S.runs.length) load(S.runs[0].run);
+  else $('#headline').textContent = 'No runs yet — run a task, then reload.';
+}
+
+function renderRuns() {
+  $('#runs').innerHTML = S.runs.map(r => `
+    <button class="run ${r.run === S.run ? 'on' : ''}" data-run="${r.run}">
+      <span class="dot ${r.success ? 'ok' : 'bad'}"></span>${esc(r.task)}
+      <small>${esc(r.env)}/${esc(r.mode)} · ${r.steps} steps · ${esc(r.model || '')}</small>
+    </button>`).join('') || '<div class="muted">none</div>';
+  document.querySelectorAll('.run').forEach(b => b.onclick = () => load(b.dataset.run));
+}
+
+async function load(run) {
+  S.run = run;
+  S.meta = await (await fetch(`${run}/meta.json`)).json();
+  const txt = await (await fetch(`${run}/steps.jsonl`, { cache: 'no-store' })).text();
+  S.steps = txt.split('\n').filter(l => l.trim()).map(l => JSON.parse(l));
+  S.i = 0; S.before = false;
+  const entry = S.runs.find(r => r.run === run) || {};
+  document.title = `cua-lab · ${S.meta.task}`;
+  $('#headline').textContent = `${S.meta.task} — ${S.meta.instruction}`;
+  $('#badges').innerHTML = [
+    `<span class="badge">${esc(S.meta.env)}</span>`,
+    `<span class="badge">${esc(S.meta.mode)}</span>`,
+    `<span class="badge">${esc(S.meta.model || '')}</span>`,
+    `<span class="badge ${entry.success ? 'ok' : 'bad'}">${entry.success ? 'pass' : 'fail'}</span>`,
+  ].join('');
+  $('#instruction').innerHTML = `<b>task</b> ${esc(S.meta.instruction)} &nbsp;·&nbsp; <b>screen</b> ${esc(S.meta.screen || '')}`;
+  renderRuns();
+  render();
+}
+
+function render() {
+  const st = S.steps[S.i];
+  if (!st) {
+    $('#counter').textContent = 'no steps';
+    return;
+  }
+  $('#shot').src = `${S.run}/${S.before ? st.before : st.after}`;
+  $('#counter').textContent = `step ${st.index} / ${S.steps.length - 1} · ${(st.latency_ms / 1000).toFixed(1)}s`;
+  $('#toggle').textContent = S.before ? 'show after' : 'show before';
+
+  const W = st.obs.width || 1, H = st.obs.height || 1;
+  $('#pins').innerHTML = '';
+  (st.actions || []).forEach((a, k) => {
+    if (a.x == null || a.y == null) return;
+    const pin = document.createElement('div');
+    pin.className = 'pin';
+    pin.style.left = (100 * a.x / W) + '%';
+    pin.style.top = (100 * a.y / H) + '%';
+    pin.textContent = String(k + 1);
+    pin.title = JSON.stringify(a);
+    $('#pins').appendChild(pin);
+  });
+
+  $('#actions').innerHTML = (st.actions || []).map(a =>
+    `<div class="chip">${esc(a.type)}${a.x != null ? ` @ ${a.x},${a.y}` : ''}${a.element_id != null ? ` #${a.element_id}` : ''}${a.keys ? ` ${esc(a.keys)}` : ''}${a.text ? ` ${esc(JSON.stringify(a.text))}` : ''}${a.url ? ` ${esc(a.url)}` : ''}</div>`
+  ).join('') || '<div class="muted">no action (stop)</div>';
+
+  $('#text').textContent = st.text || '—';
+  $('#usage').textContent = JSON.stringify(st.usage || {}, null, 2);
+  $('#results').textContent = JSON.stringify(st.results || [], null, 2);
+}
+
+function go(delta) {
+  if (!S.steps.length) return;
+  S.i = Math.max(0, Math.min(S.steps.length - 1, S.i + delta));
+  render();
+}
+
+$('#prev').onclick = () => go(-1);
+$('#next').onclick = () => go(1);
+$('#toggle').onclick = () => { S.before = !S.before; render(); };
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowLeft') go(-1);
+  if (e.key === 'ArrowRight') go(1);
+  if (e.key === 'b' || e.key === 'B') { S.before = !S.before; render(); }
+});
+
+boot();
+</script>
+</body>
+</html>

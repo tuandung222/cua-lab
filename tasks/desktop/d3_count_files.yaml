@@ -1,0 +1,10 @@
+id: d3_count_files
+env: desktop
+obs: pixel
+instruction: >-
+  The folder /root/data contains several files. Count how many of them have a
+  .txt extension, then write just that number into /root/Desktop/count.txt
+max_steps: 15
+verifier:
+  type: shell
+  cmd: test -f /root/Desktop/count.txt && test "$(tr -d '[:space:]' < /root/Desktop/count.txt)" = "3"

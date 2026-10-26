@@ -1,0 +1,11 @@
+id: d2_editor_save
+env: desktop
+obs: pixel
+instruction: >-
+  Open the text editor from the panel, type the sentence
+  "CUA lab: I typed this with a vision model." into the document, and save it
+  as /root/Desktop/note.txt
+max_steps: 25
+verifier:
+  type: shell
+  cmd: grep -q "I typed this with a vision model" /root/Desktop/note.txt

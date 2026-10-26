@@ -1,0 +1,23 @@
+[project]
+name = "cua-lab"
+version = "0.1.0"
+description = "A minimal, inspectable computer-use / browser-use agent harness"
+requires-python = ">=3.10"
+dependencies = [
+    "anthropic>=0.40",
+    "requests>=2.31",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+cua-lab = "cua_lab.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["cua_lab*"]
+
+[tool.setuptools.package-data]
+cua_lab = ["viewer/*.html"]

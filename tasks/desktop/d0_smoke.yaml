@@ -1,0 +1,11 @@
+id: d0_smoke
+env: desktop
+obs: pixel
+instruction: Smoke test — take a screenshot and stop. No model involved.
+max_steps: 3
+script:
+  - {type: screenshot}
+  - {type: finish}
+verifier:
+  type: shell
+  cmd: "true"

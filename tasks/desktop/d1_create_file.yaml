@@ -1,0 +1,10 @@
+id: d1_create_file
+env: desktop
+obs: pixel
+instruction: >-
+  Open a terminal window, then create a file at /root/Desktop/hello.txt
+  whose exact contents are the single line: hello-cua-lab
+max_steps: 12
+verifier:
+  type: shell
+  cmd: test -f /root/Desktop/hello.txt && grep -qx hello-cua-lab /root/Desktop/hello.txt

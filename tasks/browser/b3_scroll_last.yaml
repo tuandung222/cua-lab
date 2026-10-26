@@ -1,0 +1,9 @@
+id: b3_scroll_last
+env: browser
+obs: dom
+instruction: >-
+  On the Team page, open the profile of the person in the last row of the table.
+max_steps: 25
+verifier:
+  type: js
+  expr: location.pathname === '/team/p30.html'

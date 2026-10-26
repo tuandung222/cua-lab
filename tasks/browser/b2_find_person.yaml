@@ -1,0 +1,10 @@
+id: b2_find_person
+env: browser
+obs: dom
+instruction: >-
+  On the Team page, find the employee whose salary is 95000 and open their
+  profile page.
+max_steps: 20
+verifier:
+  type: js
+  expr: location.pathname === '/team/p14.html'

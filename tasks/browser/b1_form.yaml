@@ -1,0 +1,10 @@
+id: b1_form
+env: browser
+obs: dom
+instruction: >-
+  Open the Contact page and submit the form with name "John",
+  email "john@example.com" and message "hello from cua-lab".
+max_steps: 15
+verifier:
+  type: js
+  expr: location.pathname.endsWith('/success.html') && new URLSearchParams(location.search).get('name') === 'John'

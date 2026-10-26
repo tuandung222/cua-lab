@@ -1,0 +1,31 @@
+name: cua-lab
+
+services:
+  desktop:
+    build: ./envs/desktop
+    image: cua-lab-desktop:0.1
+    ports:
+      - "8001:8000"   # actuator HTTP
+      - "6080:6080"   # noVNC (watch live)
+    shm_size: "1gb"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  browser:
+    build: ./envs/browser
+    image: cua-lab-browser:0.1
+    ports:
+      - "8002:8000"   # actuator HTTP
+      - "6081:6080"   # noVNC (watch live)
+      - "9222:9222"   # raw CDP, for poking at the page yourself
+    shm_size: "2gb"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 20

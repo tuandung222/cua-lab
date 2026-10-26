@@ -1,0 +1,42 @@
+# cua-lab panel (tint2)
+panel_monitor = all
+panel_position = bottom center horizontal
+panel_size = 100% 44
+panel_margin = 0 0
+panel_padding = 6 4 6
+panel_background_id = 1
+panel_items = LTSC
+panel_layer = top
+
+launcher_padding = 6 4 6
+launcher_icon_size = 26
+launcher_item_app = /root/.local/share/applications/xterm.desktop
+launcher_item_app = /root/.local/share/applications/mousepad.desktop
+launcher_item_app = /root/.local/share/applications/pcmanfm.desktop
+
+taskbar_mode = single_desktop
+taskbar_padding = 4 4 4
+taskbar_background_id = 0
+task_icon = 1
+task_text = 0
+task_maximum_size = 200 40
+
+systray_padding = 4 4 2
+systray_background_id = 0
+
+clock_padding = 6 4
+clock_background_id = 0
+clock_font = DejaVu Sans 10
+clock_format = %H:%M
+
+font = DejaVu Sans 10
+
+# Background 1: panel
+rounded = 0
+border_width = 0
+background_color = #2e3440 100
+
+# Background 2: task buttons
+rounded = 6
+border_width = 0
+background_color = #3b4252 100
