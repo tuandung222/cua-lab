@@ -242,8 +242,16 @@ class AnthropicPolicy:
             if kind == "text":
                 texts.append(block.text)
             elif kind == "tool_use":
+                action = self._normalize(block.name, dict(block.input or {}))
+                if action.type == "unknown":
+                    raise PolicyError(
+                        f"unrecognized tool_use name={block.name!r} input={dict(block.input or {})!r}. "
+                        "Gateways that proxy Anthropic models sometimes flatten the typed computer "
+                        "tool into a nameless function; try CUA_TOOL=computer_20250124 with "
+                        "CUA_ANTHROPIC_BETA=computer-use-2025-01-24, or use the function-tool variant."
+                    )
                 pending.append(block)
-                actions.append(self._normalize(block.name, dict(block.input or {})))
+                actions.append(action)
 
         self._pending = pending
         self._messages.append(
@@ -264,18 +272,22 @@ class AnthropicPolicy:
 
     def _normalize(self, name: str, inp: dict[str, Any]) -> Action:
         n = (name or "").lower()
-        if n in ("computer", "browser", "computer_toolset_20260801"):
-            n = (inp.pop("action", "") or "").lower()
+        if n in ("computer", "browser", "computer_toolset_20260801", LEGACY_TOOL):
+            # Some gateways relay the legacy tool with `type` instead of `action`.
+            n = (inp.pop("action", "") or inp.pop("type", "") or "").lower()
 
         coord = inp.get("coordinate") or [None, None]
         x, y = (list(coord) + [None, None])[:2]
+        # Gateways that re-serialize the computer tool sometimes rename `text`
+        # to `key`/`keys`; accept all three spellings.
+        text = inp.get("text") or inp.get("key") or inp.get("keys") or ""
 
         if n in ("left_click", "click"):
             if inp.get("element_id") is not None:
                 return Action("click_element", element_id=int(inp["element_id"]))
-            return Action("click", x=x, y=y, keys=inp.get("text"))
+            return Action("click", x=x, y=y, keys=text or None)
         if n == "right_click":
-            return Action("right_click", x=x, y=y, keys=inp.get("text"))
+            return Action("right_click", x=x, y=y, keys=text or None)
         if n == "middle_click":
             return Action("middle_click", x=x, y=y)
         if n == "double_click":
@@ -305,15 +317,15 @@ class AnthropicPolicy:
                 return Action(
                     "type_element",
                     element_id=int(inp["element_id"]),
-                    text=inp.get("text", ""),
+                    text=text,
                     submit=bool(inp.get("submit")),
                 )
-            return Action("type", text=inp.get("text", ""))
+            return Action("type", text=text)
         if n == "key":
-            return Action("key", keys=inp.get("text", ""), amount=int(inp.get("repeat") or 1))
+            return Action("key", keys=text, amount=int(inp.get("repeat") or 1))
         if n == "hold_key":
             return Action(
-                "hold_key", keys=inp.get("text", ""), amount=int(float(inp.get("duration") or 1) * 1000)
+                "hold_key", keys=text, amount=int(float(inp.get("duration") or 1) * 1000)
             )
         if n == "wait":
             return Action("wait", amount=int(float(inp.get("duration") or 1) * 1000))

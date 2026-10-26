@@ -4,7 +4,7 @@ obs: dom
 instruction: Smoke test — navigate to the local home page and stop. No model involved.
 max_steps: 5
 script:
-  - {type: goto, url: "http://127.0.0.1:8000/index.html"}
+  - {type: goto, url: "http://127.0.0.1:8080/index.html"}
   - {type: finish}
 verifier:
   type: js

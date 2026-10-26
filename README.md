@@ -33,7 +33,7 @@ ablation: same model, same task, different observation and action space.
 ## Quickstart
 
 ```bash
-cp .env.example .env          # set ANTHROPIC_API_KEY
+cp .env.example .env          # ANTHROPIC_API_KEY (+ optional gateway settings)
 uv sync
 make up                       # builds both sandboxes (~3-5 min first time)
 make doctor
@@ -112,6 +112,32 @@ CUA_TOOL=computer_toolset_20260801   # or the legacy computer_20250124
 CUA_MODEL=claude-sonnet-5-5
 ```
 
+If you point the SDK at a third-party gateway (`ANTHROPIC_BASE_URL`) rather
+than api.anthropic.com, expect the tool shape to change. Measured on a LiteLLM
+gateway in front of OpenRouter:
+
+- `computer_toolset_20260801` is **flattened** into a nameless function
+  (`litellm_unnamed_tool_0`, empty input). The policy now raises a loud
+  `PolicyError` instead of silently executing `unknown`.
+- `computer_20250124` + `anthropic-beta: computer-use-2025-01-24` survives, but
+  the model emits `{"type": "click"}` instead of `{"action": ...}` and may put
+  keys under `key` instead of `text`. `_normalize()` accepts both spellings.
+- Custom function tools (the DOM `browser` tool) pass through unchanged, so DOM
+  mode is gateway-safe by construction.
+
+Config for that gateway:
+
+```bash
+ANTHROPIC_BASE_URL=https://gateway.example.com    # no /v1
+ANTHROPIC_API_KEY=...
+CUA_MODEL=openrouter/anthropic/claude-sonnet-4.6
+CUA_TOOL=computer_20250124
+CUA_ANTHROPIC_BETA=computer-use-2025-01-24
+```
+
+`.env` in the repo root is autoloaded by the CLI (real env vars win), so
+`make` targets need no shell setup.
+
 If a run fails with an unknown tool or action, dump the first response
 (`traces/<run>/steps.jsonl`, field `raw` was written by the policy — add
 `--tool` to try the legacy shape) and adjust `_normalize()` in
@@ -138,6 +164,18 @@ real difference between a CUA and a BUA at the protocol level.
   node.
 - **Viewport clipping.** Only elements intersecting the viewport are listed, so
   the scroll task cannot be solved without scrolling.
+- **Two servers in the browser container.** The actuator owns `:8000`; the
+  static site is served on `:8080` inside the container and is reached only
+  through Chromium (`goto http://127.0.0.1:8080/...`). Do not put both on 8000.
+- **Restart leftovers.** `docker compose restart` leaves `/tmp/.X99-lock` and
+  (for Chromium) `Singleton*` behind, so the next start dies with "Server is
+  already active for display 99". Both `start.sh` scripts clear the locks when
+  the display is not already up, and exit non-zero if Xvfb/Chromium never
+  comes up instead of starting a broken actuator.
+- **State survives a run.** Tasks mutate the sandbox, so a verifier can pass on
+  leftovers. `docker compose restart` (or rebuilding) gives a clean state;
+  the desktop seed is baked into the image, the browser site is regenerated at
+  container start.
 - **Arm64.** Both images are `debian:bookworm-slim`; Chromium/X11/Playwright all
   have arm64 builds. Docker Desktop must be running.
 

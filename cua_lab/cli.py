@@ -23,6 +23,20 @@ LIVE_VIEW = {
 }
 
 
+def _load_dotenv(path: Path = Path(".env")) -> None:
+    """Minimal .env loader; real environment always wins."""
+    if not path.exists():
+        return
+    for raw in path.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, val = line.split("=", 1)
+        key, val = key.strip(), val.split(" #")[0].strip().strip("'\"")
+        if key and val and key not in os.environ:
+            os.environ[key] = val
+
+
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="cua-lab", description="Minimal CUA / BUA harness")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -51,6 +65,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    _load_dotenv()
     args = _build_parser().parse_args(argv)
     if args.cmd == "run":
         return cmd_run(args)
@@ -147,6 +162,9 @@ def cmd_doctor() -> int:
     problems = 0
     print(f"python    : {sys.version.split()[0]}")
     print(f"api key   : {'set' if os.environ.get('ANTHROPIC_API_KEY') else 'MISSING'}")
+    print(f"base url  : {os.environ.get('ANTHROPIC_BASE_URL', 'https://api.anthropic.com')}")
+    print(f"model     : {os.environ.get('CUA_MODEL', '(policy default)')}")
+    print(f"tool      : {os.environ.get('CUA_TOOL', 'computer_toolset_20260801')}")
     if not os.environ.get("ANTHROPIC_API_KEY"):
         problems += 1
 
