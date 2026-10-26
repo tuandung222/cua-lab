@@ -57,8 +57,23 @@
     position: absolute; transform: translate(-50%, -50%); width: 22px; height: 22px; border-radius: 50%;
     border: 2px solid #ffd166; background: rgba(255, 209, 102, .18); color: #ffd166;
     display: grid; place-items: center; font-size: 11px; font-weight: 700;
-    box-shadow: 0 0 0 6px rgba(255, 209, 102, .12);
+    box-shadow: 0 0 0 6px rgba(255, 209, 102, .12); z-index: 3;
   }
+  .dombox {
+    position: absolute; border: 1px dashed rgba(79, 140, 255, .65); background: rgba(79, 140, 255, .06);
+    pointer-events: none; z-index: 2;
+  }
+  .dombox.active {
+    border: 2px solid #ffd166; background: rgba(255, 209, 102, .15);
+  }
+  .dombox span {
+    position: absolute; top: -15px; left: -1px; background: #1b2845; color: #93c5fd;
+    font-size: 10px; padding: 0 4px; border-radius: 3px; border: 1px solid rgba(79, 140, 255, .5);
+    white-space: nowrap;
+  }
+  .dombox.active span { background: #ffd166; color: #0f1115; font-weight: 700; border-color: #ffd166; }
+  .el-row { padding: 3px 6px; border-radius: 4px; font-size: 11px; margin-bottom: 2px; border: 1px solid transparent; }
+  .el-row.active { background: rgba(255, 209, 102, .14); border-color: #ffd166; color: #ffd166; }
   #stagewrap { overflow: auto; display: flex; justify-content: center; flex: 1; min-height: 0; }
   #instruction { border-top: 1px solid var(--line); padding: 9px 14px; color: var(--muted); font-size: 12px; }
   #instruction b { color: var(--text); font-weight: 600; }
@@ -101,6 +116,7 @@
         <span id="counter">—</span>
         <button class="ctl" id="next">→</button>
         <span class="spacer"></span>
+        <button class="ctl" id="dombtn" style="display:none">hide DOM</button>
         <button class="ctl" id="toggle">show before</button>
       </div>
       <div id="stagewrap">
@@ -114,6 +130,10 @@
       <div id="actions"></div>
       <h3>Model text</h3>
       <pre id="text">—</pre>
+      <div id="domsec" style="display:none">
+        <h3 id="domhead">DOM elements</h3>
+        <div id="domlist" style="max-height:220px;overflow:auto;background:#10141b;border:1px solid var(--line);border-radius:6px;padding:6px"></div>
+      </div>
       <h3>Usage</h3>
       <pre id="usage">{}</pre>
       <h3>Results</h3>
@@ -121,10 +141,10 @@
     </section>
   </div>
 
-  <footer>←/→ navigate · b toggle before/after</footer>
+  <footer>←/→ navigate · b toggle before/after · d toggle DOM overlay</footer>
 
 <script>
-const S = { runs: [], run: null, meta: null, steps: [], i: 0, before: false };
+const S = { runs: [], run: null, meta: null, steps: [], i: 0, before: false, showDom: true };
 const $ = (s) => document.querySelector(s);
 const esc = (v) => String(v ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
@@ -178,23 +198,64 @@ function render() {
   $('#toggle').textContent = S.before ? 'show after' : 'show before';
 
   const W = st.obs.width || 1, H = st.obs.height || 1;
+  const els = st.obs.elements || [];
+  const byId = Object.fromEntries(els.map(e => [e.id, e]));
+  const activeIds = new Set((st.actions || []).map(a => a.element_id).filter(v => v != null));
+
+  $('#dombtn').style.display = els.length ? '' : 'none';
+  $('#dombtn').textContent = S.showDom ? 'hide DOM' : 'show DOM';
   $('#pins').innerHTML = '';
+
+  if (els.length && S.showDom && S.before) {
+    els.forEach(e => {
+      const left = e.left != null ? e.left : e.x;
+      const top = e.top != null ? e.top : e.y;
+      if (left == null || top == null || !e.w || !e.h) return;
+      const box = document.createElement('div');
+      box.className = 'dombox' + (activeIds.has(e.id) ? ' active' : '');
+      box.style.left = (100 * left / W) + '%';
+      box.style.top = (100 * top / H) + '%';
+      box.style.width = (100 * e.w / W) + '%';
+      box.style.height = (100 * e.h / H) + '%';
+      box.innerHTML = `<span>#${e.id}</span>`;
+      $('#pins').appendChild(box);
+    });
+  }
+
   (st.actions || []).forEach((a, k) => {
-    if (a.x == null || a.y == null) return;
+    let x = a.x, y = a.y;
+    if ((x == null || y == null) && a.element_id != null && byId[a.element_id]) {
+      const el = byId[a.element_id];
+      x = el.left != null ? el.left + (el.w || 0) / 2 : el.x;
+      y = el.top != null ? el.top + (el.h || 0) / 2 : el.y;
+    }
+    if (x == null || y == null) return;
     const pin = document.createElement('div');
     pin.className = 'pin';
-    pin.style.left = (100 * a.x / W) + '%';
-    pin.style.top = (100 * a.y / H) + '%';
+    pin.style.left = (100 * x / W) + '%';
+    pin.style.top = (100 * y / H) + '%';
     pin.textContent = String(k + 1);
     pin.title = JSON.stringify(a);
     $('#pins').appendChild(pin);
   });
 
   $('#actions').innerHTML = (st.actions || []).map(a =>
-    `<div class="chip">${esc(a.type)}${a.x != null ? ` @ ${a.x},${a.y}` : ''}${a.element_id != null ? ` #${a.element_id}` : ''}${a.keys ? ` ${esc(a.keys)}` : ''}${a.text ? ` ${esc(JSON.stringify(a.text))}` : ''}${a.url ? ` ${esc(a.url)}` : ''}</div>`
+    `<div class="chip"><b>${esc(a.type)}</b>${a.x != null ? ` @ ${a.x},${a.y}` : ''}${a.element_id != null ? ` #${a.element_id}` : ''}${a.direction ? ` ${esc(a.direction)}:${esc(a.amount ?? '')}` : ''}${a.keys ? ` ${esc(a.keys)}` : ''}${a.text ? ` ${esc(JSON.stringify(a.text))}` : ''}${a.url ? ` ${esc(a.url)}` : ''}${a.note ? `<div class="meta">${esc(a.note)}</div>` : ''}</div>`
   ).join('') || '<div class="muted">no action (stop)</div>';
 
-  $('#text').textContent = st.text || '—';
+  if (els.length) {
+    $('#domsec').style.display = '';
+    $('#domhead').textContent = `DOM elements (${els.length})`;
+    $('#domlist').innerHTML = els.map(e => {
+      const kind = e.tag + (e.type ? `[${e.type}]` : '');
+      return `<div class="el-row ${activeIds.has(e.id) ? 'active' : ''}"><b>[${e.id}]</b> ${esc(kind)} "${esc(e.label || '')}" <span class="muted">@ (${e.x},${e.y})</span></div>`;
+    }).join('');
+  } else {
+    $('#domsec').style.display = 'none';
+  }
+
+  const notes = (st.actions || []).map(a => a.note).filter(Boolean).join('\n');
+  $('#text').textContent = st.text || notes || '—';
   $('#usage').textContent = JSON.stringify(st.usage || {}, null, 2);
   $('#results').textContent = JSON.stringify(st.results || [], null, 2);
 }
@@ -208,11 +269,13 @@ function go(delta) {
 $('#prev').onclick = () => go(-1);
 $('#next').onclick = () => go(1);
 $('#toggle').onclick = () => { S.before = !S.before; render(); };
+$('#dombtn').onclick = () => { S.showDom = !S.showDom; if (S.showDom) S.before = true; render(); };
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowLeft') go(-1);
   if (e.key === 'ArrowRight') go(1);
   if (e.key === 'b' || e.key === 'B') { S.before = !S.before; render(); }
+  if (e.key === 'd' || e.key === 'D') { S.showDom = !S.showDom; if (S.showDom) S.before = true; render(); }
 });
 
 boot();

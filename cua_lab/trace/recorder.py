@@ -35,6 +35,17 @@ class Recorder:
         (self.dir / before_name).write_bytes(before.screenshot)
         (self.dir / after_name).write_bytes(after.screenshot)
 
+        by_id = {e.get("id"): e for e in (before.elements or []) if isinstance(e, dict)}
+        wired_actions = []
+        for a in decision.actions:
+            w = a.wire()
+            if w.get("element_id") is not None and w.get("x") is None:
+                el = by_id.get(w["element_id"])
+                if el and el.get("x") is not None and el.get("y") is not None:
+                    w["x"] = el["x"]
+                    w["y"] = el["y"]
+            wired_actions.append(w)
+
         row = {
             "index": i,
             "before": before_name,
@@ -45,9 +56,17 @@ class Recorder:
                 "url": before.url,
                 "title": before.title,
                 "n_elements": len(before.elements or []),
+                "elements": before.elements,
+                "changed": before.changed,
+                "cursor": before.cursor,
             },
-            "after_obs": {"url": after.url, "title": after.title},
-            "actions": [a.wire() for a in decision.actions],
+            "after_obs": {
+                "url": after.url,
+                "title": after.title,
+                "changed": after.changed,
+                "cursor": after.cursor,
+            },
+            "actions": wired_actions,
             "results": results,
             "text": decision.text,
             "usage": decision.usage,

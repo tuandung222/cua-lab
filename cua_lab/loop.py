@@ -22,10 +22,11 @@ def run(
 ) -> tuple[bool, dict]:
     obs = env.observe()
     finished = False
+    last_results: list[dict] | None = None
 
     for i in range(max_steps):
         t0 = time.time()
-        decision = policy.decide(task, obs)
+        decision = policy.decide(task, obs, last_results)
         latency_ms = (time.time() - t0) * 1000
 
         if not decision.actions:
@@ -48,6 +49,7 @@ def run(
                 log(f"     !! {result['error']}")
 
         obs = env.observe()
+        last_results = results
         rec.step(i, before, obs, decision, results, latency_ms)
 
         if finished:

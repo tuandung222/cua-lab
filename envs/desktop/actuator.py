@@ -81,8 +81,56 @@ def _require_xy(x, y) -> None:
         raise ValueError("this action needs x and y")
 
 
+KEYMAP = {
+    "ctrl": "Control_L",
+    "control": "Control_L",
+    "alt": "Alt_L",
+    "shift": "Shift_L",
+    "super": "Super_L",
+    "meta": "Super_L",
+    "cmd": "Super_L",
+    "win": "Super_L",
+    "return": "Return",
+    "enter": "Return",
+    "kp_enter": "KP_Enter",
+    "esc": "Escape",
+    "escape": "Escape",
+    "space": "space",
+    "backspace": "BackSpace",
+    "delete": "Delete",
+    "del": "Delete",
+    "tab": "Tab",
+    "up": "Up",
+    "arrowup": "Up",
+    "down": "Down",
+    "arrowdown": "Down",
+    "left": "Left",
+    "arrowleft": "Left",
+    "right": "Right",
+    "arrowright": "Right",
+    "pageup": "Prior",
+    "page_up": "Prior",
+    "prior": "Prior",
+    "pagedown": "Next",
+    "page_down": "Next",
+    "next": "Next",
+    "home": "Home",
+    "end": "End",
+    "insert": "Insert",
+}
+
+
+def _keysyms(combo: str | None) -> list[str]:
+    chords = []
+    for token in (combo or "").split():
+        parts = [KEYMAP.get(p.lower(), p) for p in token.split("+") if p]
+        if parts:
+            chords.append("+".join(parts))
+    return chords
+
+
 def _mods(keys: str | None) -> list[str]:
-    return [m for m in (keys or "").replace(" ", "+").split("+") if m]
+    return [KEYMAP.get(m.lower(), m) for m in (keys or "").replace(" ", "+").split("+") if m]
 
 
 def _click(x, y, count: int = 1, keys: str | None = None, button: int = 1) -> None:
@@ -150,17 +198,22 @@ def dispatch(a: dict) -> None:
         _drag(x, y, a.get("to_x"), a.get("to_y"))
     elif t == "type":
         text = a.get("text") or ""
-        if text:
-            xdo("type", "--delay", 20, "--", text)
+        if not text:
+            raise ValueError("type action requires non-empty text")
+        xdo("type", "--delay", 20, "--", text)
     elif t == "key":
-        combo = a.get("keys") or ""
+        chords = _keysyms(a.get("keys"))
+        if not chords:
+            raise ValueError("key action requires a non-empty key name or combo")
         for _ in range(max(1, int(a.get("amount") or 1))):
-            xdo("key", combo)
+            xdo("key", *chords)
     elif t == "hold_key":
-        combo = a.get("keys") or ""
-        xdo("keydown", combo)
+        chords = _keysyms(a.get("keys"))
+        if not chords:
+            raise ValueError("hold_key action requires a non-empty key name or combo")
+        xdo("keydown", chords[0])
         time.sleep(max(0, int(a.get("amount") or 1000)) / 1000)
-        xdo("keyup", combo)
+        xdo("keyup", chords[0])
     elif t == "scroll":
         _scroll(x, y, a.get("direction") or "down", int(a.get("amount") or 3))
     elif t == "wait":
@@ -230,3 +283,29 @@ def exec_cmd(body: ExecIn) -> dict:
 @app.post("/eval")
 def eval_js() -> dict:
     return {"error": "not a browser"}
+
+
+@app.post("/reset")
+def reset_env() -> dict:
+    with _LOCK:
+        subprocess.run(
+            "pkill -9 -x xterm || true; pkill -9 -x mousepad || true; pkill -9 -x pcmanfm || true",
+            shell=True,
+            env=ENV,
+            timeout=5,
+        )
+        subprocess.run(
+            "rm -rf /root/Desktop/* /root/data/* /root/archive/* && "
+            "mkdir -p /root/Desktop /root/data /root/archive && "
+            "if [ -d /opt/seed ]; then cp /opt/seed/notes.txt /root/notes.txt && cp /opt/seed/data/* /root/data/; fi",
+            shell=True,
+            env=ENV,
+            check=True,
+            timeout=10,
+        )
+        try:
+            xdo("mousemove", WIDTH // 2, HEIGHT // 2)
+        except Exception:  # noqa: BLE001
+            pass
+        STATE["png"] = None
+    return {"ok": True}

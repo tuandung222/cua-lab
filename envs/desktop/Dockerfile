@@ -18,13 +18,12 @@ COPY start.sh /opt/start.sh
 COPY tint2rc /root/.config/tint2/tint2rc
 COPY menu.xml /root/.config/openbox/menu.xml
 COPY desktops/ /root/.local/share/applications/
-COPY seed/ /tmp/seed/
+COPY seed/ /opt/seed/
 
 RUN chmod +x /opt/start.sh \
     && mkdir -p /root/Desktop /root/data /root/archive \
-    && cp /tmp/seed/notes.txt /root/notes.txt \
-    && cp /tmp/seed/data/* /root/data/ \
-    && rm -rf /tmp/seed
+    && cp /opt/seed/notes.txt /root/notes.txt \
+    && cp /opt/seed/data/* /root/data/
 
 EXPOSE 8000 5900 6080
 

@@ -63,6 +63,7 @@ BROWSER_TOOL: dict[str, Any] = {
             "url": {"type": "string", "description": "Absolute or relative URL for goto."},
             "direction": {"type": "string", "enum": ["up", "down", "left", "right"]},
             "amount": {"type": "integer", "description": "Scroll amount in wheel notches."},
+            "duration": {"type": "number", "description": "Wait duration in seconds."},
             "submit": {"type": "boolean", "description": "Press Enter after typing."},
             "note": {"type": "string", "description": "One short sentence of reasoning."},
         },
@@ -129,14 +130,19 @@ class AnthropicPolicy:
         self.keep_images = os.environ.get("CUA_KEEP_IMAGES", "0") == "1"
 
         self._messages: list[dict[str, Any]] = []
-        self._pending: list[Any] = []
+        self._pending: list[tuple[Any, Action]] = []
         self._started = False
         self._tools: list[dict[str, Any]] = []
         self._obs: Observation | None = None
 
     # ---------------------------------------------------------------- public
 
-    def decide(self, task: Task, obs: Observation) -> Decision:
+    def decide(
+        self,
+        task: Task,
+        obs: Observation,
+        results: list[dict[str, Any]] | None = None,
+    ) -> Decision:
         self._obs = obs
         if not self._started:
             self._started = True
@@ -147,7 +153,7 @@ class AnthropicPolicy:
             content.append(_image_block(obs.screenshot))
             self._messages.append({"role": "user", "content": content})
         else:
-            self._messages.append({"role": "user", "content": self._tool_results(obs)})
+            self._messages.append({"role": "user", "content": self._tool_results(obs, results)})
 
         resp = self._call()
         return self._parse(resp)
@@ -175,21 +181,50 @@ class AnthropicPolicy:
             ]
         return [{"type": self.tool}]
 
-    def _tool_results(self, obs: Observation) -> list[dict[str, Any]]:
-        results = []
-        for idx, block in enumerate(self._pending):
+    def _tool_results(
+        self,
+        obs: Observation,
+        act_results: list[dict[str, Any]] | None = None,
+    ) -> list[dict[str, Any]]:
+        out = []
+        for idx, (block, action) in enumerate(self._pending):
             last = idx == len(self._pending) - 1
+            res = act_results[idx] if act_results and idx < len(act_results) else {}
+            failed = res.get("ok") is False
+            err_msg = f"Action failed: {res.get('error', 'unknown error')}" if failed else None
+
+            info_lines: list[str] = []
+            if err_msg:
+                info_lines.append(err_msg)
+            if action.type == "cursor_position" and obs.cursor:
+                info_lines.append(f"Cursor position: ({obs.cursor.get('x')}, {obs.cursor.get('y')})")
+
             if last:
-                note = "New observation.\n" + _dom_text(obs) if self.mode == "dom" else "New screenshot."
+                if self.mode == "dom":
+                    info_lines.append("New observation.\n" + _dom_text(obs))
+                else:
+                    status = "New screenshot."
+                    if obs.changed is False and action.type not in (
+                        "screenshot",
+                        "cursor_position",
+                        "wait",
+                        "finish",
+                    ):
+                        status += " (screen pixels did not change)"
+                    info_lines.append(status)
                 content: list[dict[str, Any]] = [
-                    {"type": "text", "text": note},
+                    {"type": "text", "text": "\n".join(info_lines)},
                     _image_block(obs.screenshot),
                 ]
             else:
-                content = [{"type": "text", "text": "ok"}]
-            results.append({"type": "tool_result", "tool_use_id": block.id, "content": content})
+                content = [{"type": "text", "text": "\n".join(info_lines) or "ok"}]
+
+            item: dict[str, Any] = {"type": "tool_result", "tool_use_id": block.id, "content": content}
+            if failed:
+                item["is_error"] = True
+            out.append(item)
         self._pending = []
-        return results
+        return out
 
     def _system(self, obs: Observation) -> str:
         if self.mode == "dom":
@@ -235,7 +270,7 @@ class AnthropicPolicy:
     def _parse(self, resp: Any) -> Decision:
         texts: list[str] = []
         actions: list[Action] = []
-        pending: list[Any] = []
+        pending: list[tuple[Any, Action]] = []
 
         for block in resp.content:
             kind = getattr(block, "type", None)
@@ -250,7 +285,7 @@ class AnthropicPolicy:
                         "tool into a nameless function; try CUA_TOOL=computer_20250124 with "
                         "CUA_ANTHROPIC_BETA=computer-use-2025-01-24, or use the function-tool variant."
                     )
-                pending.append(block)
+                pending.append((block, action))
                 actions.append(action)
 
         self._pending = pending
@@ -279,38 +314,40 @@ class AnthropicPolicy:
         coord = inp.get("coordinate") or [None, None]
         x, y = (list(coord) + [None, None])[:2]
         # Gateways that re-serialize the computer tool sometimes rename `text`
-        # to `key`/`keys`; accept all three spellings.
-        text = inp.get("text") or inp.get("key") or inp.get("keys") or ""
+        # to `value` or `key`/`keys`; accept all spellings.
+        text = inp.get("text") or inp.get("value") or inp.get("key") or inp.get("keys") or ""
+        note = inp.get("note")
 
         if n in ("left_click", "click"):
             if inp.get("element_id") is not None:
-                return Action("click_element", element_id=int(inp["element_id"]))
-            return Action("click", x=x, y=y, keys=text or None)
+                return Action("click_element", element_id=int(inp["element_id"]), note=note)
+            return Action("click", x=x, y=y, keys=text or None, note=note)
         if n == "right_click":
-            return Action("right_click", x=x, y=y, keys=text or None)
+            return Action("right_click", x=x, y=y, keys=text or None, note=note)
         if n == "middle_click":
-            return Action("middle_click", x=x, y=y)
+            return Action("middle_click", x=x, y=y, note=note)
         if n == "double_click":
-            return Action("double_click", x=x, y=y)
+            return Action("double_click", x=x, y=y, note=note)
         if n == "triple_click":
-            return Action("triple_click", x=x, y=y)
+            return Action("triple_click", x=x, y=y, note=note)
         if n == "mouse_move":
-            return Action("move", x=x, y=y)
+            return Action("move", x=x, y=y, note=note)
         if n == "left_click_drag":
             start = inp.get("start_coordinate") or [x, y]
             sx, sy = (list(start) + [None, None])[:2]
-            return Action("drag", x=sx, y=sy, to_x=x, to_y=y)
+            return Action("drag", x=sx, y=sy, to_x=x, to_y=y, note=note)
         if n == "left_mouse_down":
-            return Action("mousedown", x=x, y=y)
+            return Action("mousedown", x=x, y=y, note=note)
         if n == "left_mouse_up":
-            return Action("mouseup", x=x, y=y)
+            return Action("mouseup", x=x, y=y, note=note)
         if n == "scroll":
             return Action(
                 "scroll",
                 x=x,
                 y=y,
-                direction=inp.get("scroll_direction") or "down",
-                amount=int(inp.get("scroll_amount") or 3),
+                direction=inp.get("scroll_direction") or inp.get("direction") or "down",
+                amount=int(inp.get("scroll_amount") or inp.get("amount") or 3),
+                note=note,
             )
         if n == "type":
             if inp.get("element_id") is not None:
@@ -319,24 +356,25 @@ class AnthropicPolicy:
                     element_id=int(inp["element_id"]),
                     text=text,
                     submit=bool(inp.get("submit")),
+                    note=note,
                 )
-            return Action("type", text=text)
+            return Action("type", text=text, note=note)
         if n == "key":
-            return Action("key", keys=text, amount=int(inp.get("repeat") or 1))
+            return Action("key", keys=text, amount=int(inp.get("repeat") or 1), note=note)
         if n == "hold_key":
-            return Action(
-                "hold_key", keys=text, amount=int(float(inp.get("duration") or 1) * 1000)
-            )
+            dur = inp.get("duration") or inp.get("amount") or 1
+            return Action("hold_key", keys=text, amount=int(float(dur) * 1000), note=note)
         if n == "wait":
-            return Action("wait", amount=int(float(inp.get("duration") or 1) * 1000))
+            dur = inp.get("duration") or inp.get("amount") or 1
+            return Action("wait", amount=int(float(dur) * 1000), note=note)
         if n == "screenshot":
-            return Action("screenshot")
+            return Action("screenshot", note=note)
         if n == "cursor_position":
-            return Action("cursor_position")
+            return Action("cursor_position", note=note)
         if n == "goto":
-            return Action("goto", url=inp.get("url", ""))
+            return Action("goto", url=inp.get("url", ""), note=note)
         if n == "finish":
-            return Action("finish", note=inp.get("note"))
+            return Action("finish", note=note)
         if n == "zoom":
             return Action("zoom", x=x, y=y, note="zoom is not implemented in this harness")
         return Action(n or "unknown", note=str(inp)[:200])

@@ -50,6 +50,8 @@ class Observation:
     elements: list[dict[str, Any]] | None = None
     url: str | None = None
     title: str | None = None
+    changed: bool | None = None
+    cursor: dict[str, int] | None = None
 
 
 @dataclass

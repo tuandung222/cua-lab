@@ -51,6 +51,7 @@ def _build_parser() -> argparse.ArgumentParser:
     r.add_argument("--url", default=None, help="actuator base url")
     r.add_argument("--max-steps", type=int, default=None)
     r.add_argument("--traces", default="traces")
+    r.add_argument("--no-reset", action="store_true", help="keep sandbox state from previous run")
 
     v = sub.add_parser("view", help="serve the trace viewer")
     v.add_argument("--port", type=int, default=8765)
@@ -95,6 +96,8 @@ def cmd_run(args) -> int:
     env = HttpEnv(env_name, url, mode)
     try:
         health = env.health()
+        if not args.no_reset:
+            env.reset()
     except EnvError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

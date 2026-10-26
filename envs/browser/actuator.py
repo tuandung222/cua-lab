@@ -44,16 +44,23 @@ DOM_JS = r"""
     if (el.disabled) continue;
     id += 1;
     el.setAttribute('data-cua-id', String(id));
+    const labelText = el.labels && el.labels.length
+      ? Array.from(el.labels).map(l => l.innerText).join(' ')
+      : '';
     const raw = el.innerText || el.value || el.getAttribute('aria-label') ||
-                el.getAttribute('placeholder') || el.getAttribute('alt') ||
-                el.getAttribute('title') || '';
+                labelText || el.getAttribute('placeholder') || el.getAttribute('alt') ||
+                el.getAttribute('title') || el.getAttribute('name') || el.id || '';
     out.push({
       id,
       tag: el.tagName.toLowerCase(),
       type: el.getAttribute('type') || null,
       label: String(raw).trim().replace(/\s+/g, ' ').slice(0, 80),
-      x: Math.round(r.left), y: Math.round(r.top),
-      w: Math.round(r.width), h: Math.round(r.height),
+      x: Math.round(r.left + r.width / 2),
+      y: Math.round(r.top + r.height / 2),
+      left: Math.round(r.left),
+      top: Math.round(r.top),
+      w: Math.round(r.width),
+      h: Math.round(r.height),
       href: el.href || null
     });
     if (out.length >= 200) break;
@@ -217,8 +224,9 @@ async def dispatch(p, a: dict) -> None:
 
     elif t == "type":
         text = a.get("text") or ""
-        if text:
-            await p.keyboard.type(text, delay=15)
+        if not text:
+            raise ValueError("type action requires non-empty text")
+        await p.keyboard.type(text, delay=15)
 
     elif t == "key":
         combo = _keysym(a.get("keys"))
@@ -349,3 +357,21 @@ async def evaluate(body: EvalIn) -> dict:
 def exec_cmd(body: ExecIn) -> dict:
     proc = subprocess.run(body.cmd, shell=True, capture_output=True, text=True, timeout=60)
     return {"returncode": proc.returncode, "stdout": proc.stdout[-2000:], "stderr": proc.stderr[-2000:]}
+
+
+@app.post("/reset")
+async def reset_env() -> dict:
+    assert LOCK is not None
+    async with LOCK:
+        ctx = STATE["browser"].contexts[0]
+        pages = [p for p in ctx.pages if not p.is_closed()]
+        for extra in pages[1:]:
+            try:
+                await extra.close()
+            except Exception:  # noqa: BLE001
+                pass
+        p = page()
+        await p.goto("http://127.0.0.1:8080/", wait_until="domcontentloaded", timeout=15000)
+        await p.evaluate("() => { window.scrollTo(0, 0); localStorage.clear(); sessionStorage.clear(); }")
+        STATE["png"] = None
+    return {"ok": True}

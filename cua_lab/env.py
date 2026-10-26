@@ -53,7 +53,12 @@ class HttpEnv:
             elements=data.get("elements"),
             url=data.get("url"),
             title=data.get("title"),
+            changed=data.get("changed"),
+            cursor=data.get("cursor"),
         )
+
+    def reset(self) -> dict:
+        return self._post("/reset")
 
     def act(self, action: Action) -> dict:
         return self._post("/act", {"action": action.wire()})

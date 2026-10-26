@@ -16,7 +16,12 @@ class ScriptedPolicy:
     def __init__(self, actions: list[Action]):
         self._actions = list(actions)
 
-    def decide(self, task: Task, obs: Observation) -> Decision:
+    def decide(
+        self,
+        task: Task,
+        obs: Observation,
+        results: list[dict] | None = None,
+    ) -> Decision:
         if not self._actions:
             return Decision(actions=[], text="script complete")
         return Decision(actions=[self._actions.pop(0)], text=None)
