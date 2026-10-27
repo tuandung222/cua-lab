@@ -5,10 +5,11 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      xvfb x11vnc novnc websockify openbox tint2 \
+      chromium xvfb x11vnc novnc websockify openbox tint2 \
       xterm mousepad pcmanfm xdotool scrot x11-utils xclip \
       python3 python3-venv \
-      fonts-dejavu-core ca-certificates curl procps \
+      fonts-dejavu-core fonts-noto-color-emoji \
+      ca-certificates curl procps \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir fastapi uvicorn pillow
@@ -21,7 +22,7 @@ COPY desktops/ /root/.local/share/applications/
 COPY seed/ /opt/seed/
 
 RUN chmod +x /opt/start.sh \
-    && mkdir -p /root/Desktop /root/data /root/archive \
+    && mkdir -p /root/Desktop /root/data /root/archive /home/computeruse/files /home/computeruse/Downloads /srv/site/drive_files /srv/vpi_web \
     && cp /opt/seed/notes.txt /root/notes.txt \
     && cp /opt/seed/data/* /root/data/
 

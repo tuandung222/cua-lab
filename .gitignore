@@ -5,4 +5,5 @@ __pycache__/
 .env
 traces/*
 !traces/.gitkeep
+benchmarks_data/
 .DS_Store

@@ -25,6 +25,7 @@
   .badge { border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; color: var(--muted); font-size: 11px; }
   .badge.ok { color: var(--ok); border-color: #1d4d3a; }
   .badge.bad { color: var(--bad); border-color: #4d1d24; }
+  .badge.warn { color: #ffd166; border-color: #5c4814; }
 
   .app { display: grid; grid-template-columns: 230px minmax(0, 1fr) 340px; min-height: 0; }
 
@@ -126,6 +127,10 @@
     </main>
 
     <section id="detail">
+      <div id="judgesec" style="display:none">
+        <h3>Security Verdict (VPI)</h3>
+        <pre id="judgebox" style="border-color:#4d1d24;margin-bottom:10px">—</pre>
+      </div>
       <h3>Action</h3>
       <div id="actions"></div>
       <h3>Model text</h3>
@@ -170,20 +175,45 @@ function renderRuns() {
 async function load(run) {
   S.run = run;
   S.meta = await (await fetch(`${run}/meta.json`)).json();
+  let resData = {};
+  try {
+    const rr = await fetch(`${run}/result.json`, { cache: 'no-store' });
+    if (rr.ok) resData = await rr.json();
+  } catch (_) {}
+  const detail = resData.detail || {};
   const txt = await (await fetch(`${run}/steps.jsonl`, { cache: 'no-store' })).text();
   S.steps = txt.split('\n').filter(l => l.trim()).map(l => JSON.parse(l));
   S.i = 0; S.before = false;
   const entry = S.runs.find(r => r.run === run) || {};
+  const hijacked = Boolean(entry.hijacked || detail.hijacked);
+  const attempted = Boolean(entry.attempted || detail.attempted || hijacked);
   document.title = `cua-lab · ${S.meta.task}`;
   $('#headline').textContent = `${S.meta.task} — ${S.meta.instruction}`;
   $('#badges').innerHTML = [
+    S.meta.benchmark ? `<span class="badge">${esc(S.meta.benchmark)}${S.meta.platform ? '·' + esc(S.meta.platform) : ''}</span>` : '',
     `<span class="badge">${esc(S.meta.env)}</span>`,
     `<span class="badge">${esc(S.meta.mode)}</span>`,
     `<span class="badge">${esc(S.meta.model || '')}</span>`,
-    entry.hijacked ? `<span class="badge bad">HIJACKED (VPI)</span>` : '',
+    attempted && !hijacked ? `<span class="badge warn">ATTEMPTED (AR)</span>` : '',
+    hijacked ? `<span class="badge bad">HIJACKED (VPI)</span>` : '',
     `<span class="badge ${entry.success ? 'ok' : 'bad'}">${entry.success ? 'pass' : 'fail'}</span>`,
   ].join('');
-  $('#instruction').innerHTML = `<b>task</b> ${esc(S.meta.instruction)} &nbsp;·&nbsp; <b>screen</b> ${esc(S.meta.screen || '')}`;
+  let instHtml = `<b>task</b> ${esc(S.meta.instruction)} &nbsp;·&nbsp; <b>screen</b> ${esc(S.meta.screen || '')}`;
+  if (S.meta.attacker_objective || detail.attacker_objective) {
+    instHtml += `<br><b style="color:#ff5d6c">attacker objective</b> ${esc(S.meta.attacker_objective || detail.attacker_objective)}`;
+  }
+  $('#instruction').innerHTML = instHtml;
+  if (detail.explanation || S.meta.attacker_objective || detail.hijacked !== undefined) {
+    $('#judgesec').style.display = '';
+    const lines = [
+      `Attempted (AR): ${attempted ? 'YES' : 'NO'}`,
+      `Hijacked  (SR): ${hijacked ? 'YES' : 'NO'}`,
+    ];
+    if (detail.explanation) lines.push(`Reason: ${detail.explanation}`);
+    $('#judgebox').textContent = lines.join('\n');
+  } else {
+    $('#judgesec').style.display = 'none';
+  }
   renderRuns();
   render();
 }

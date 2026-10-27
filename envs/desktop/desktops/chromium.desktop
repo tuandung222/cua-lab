@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Web Browser
+Exec=chromium --no-sandbox --disable-dev-shm-usage --disable-gpu --user-data-dir=/tmp/chromium-desktop --no-first-run --no-default-browser-check --window-position=0,0 --window-size=1280,752
+Icon=web-browser
+Terminal=false
+Categories=Network;WebBrowser;

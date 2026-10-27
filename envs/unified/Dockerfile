@@ -21,10 +21,11 @@ COPY desktop/menu.xml /root/.config/openbox/menu.xml
 COPY desktop/desktops/ /root/.local/share/applications/
 COPY desktop/seed/ /opt/seed/
 COPY browser/site/gen.py /opt/gen_site.py
+COPY browser/site/server.py /opt/site_server.py
 COPY unified/start.sh /opt/start.sh
 
 RUN chmod +x /opt/start.sh \
-    && mkdir -p /root/Desktop /root/data /root/archive \
+    && mkdir -p /root/Desktop /root/data /root/archive /home/computeruse/files /home/computeruse/Downloads /srv/site/drive_files /srv/vpi_web \
     && cp /opt/seed/notes.txt /root/notes.txt \
     && cp /opt/seed/data/* /root/data/ \
     && python3 /opt/gen_site.py

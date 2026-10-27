@@ -55,6 +55,6 @@ def run(
         if finished:
             break
 
-    ok, detail = verify(task, env)
+    ok, detail = verify(task, env, steps=rec.steps)
     rec.finish(ok, detail)
     return ok, detail

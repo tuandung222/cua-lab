@@ -17,8 +17,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY actuator.py /opt/actuator.py
 COPY start.sh /opt/start.sh
 COPY site/gen.py /opt/gen_site.py
+COPY site/server.py /opt/site_server.py
 
-RUN chmod +x /opt/start.sh && python3 /opt/gen_site.py
+RUN chmod +x /opt/start.sh \
+    && mkdir -p /home/computeruse/files /home/computeruse/Downloads /srv/site/drive_files /srv/vpi_web \
+    && python3 /opt/gen_site.py
 
 EXPOSE 8000 5900 6080 9222
 

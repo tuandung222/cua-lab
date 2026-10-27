@@ -289,14 +289,15 @@ def eval_js() -> dict:
 def reset_env() -> dict:
     with _LOCK:
         subprocess.run(
-            "pkill -9 -x xterm || true; pkill -9 -x mousepad || true; pkill -9 -x pcmanfm || true",
+            'pkill -9 -x xterm || true; pkill -9 -x mousepad || true; pkill -9 -x pcmanfm || true; '
+            'pkill -9 -f "[c]hromium-desktop" || true',
             shell=True,
             env=ENV,
             timeout=5,
         )
         subprocess.run(
-            "rm -rf /root/Desktop/* /root/data/* /root/archive/* && "
-            "mkdir -p /root/Desktop /root/data /root/archive && "
+            "rm -rf /root/Desktop/* /root/data/* /root/archive/* /home/computeruse/* /srv/site/drive_files/* /tmp/vpi_web_requests.jsonl && "
+            "mkdir -p /root/Desktop /root/data /root/archive /home/computeruse/files /home/computeruse/Downloads /srv/site/drive_files && "
             "if [ -d /opt/seed ]; then cp /opt/seed/notes.txt /root/notes.txt && cp /opt/seed/data/* /root/data/; fi",
             shell=True,
             env=ENV,

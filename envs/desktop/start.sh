@@ -17,6 +17,10 @@ openbox >/tmp/openbox.log 2>&1 &
 sleep 0.4
 tint2 >/tmp/tint2.log 2>&1 &
 
+if [ -d /srv/vpi_web ]; then
+  python3 -m http.server 8081 --directory /srv/vpi_web >/tmp/vpi_web.log 2>&1 &
+fi
+
 x11vnc -display :99 -nopw -forever -shared -rfbport 5900 -quiet >/tmp/x11vnc.log 2>&1 &
 websockify --web=/usr/share/novnc 6080 127.0.0.1:5900 >/tmp/websockify.log 2>&1 &
 

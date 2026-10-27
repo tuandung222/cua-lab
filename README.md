@@ -116,10 +116,38 @@ uv run cua-lab <command> [options]
 
 | Command | Description | Key Options |
 |---|---|---|
-| `cua-lab run` | Run a single task YAML inside its target sandbox | `--task <path>`, `--obs {pixel,dom}`, `--policy {api,script}`, `--model <id>`, `--tool <type>`, `--max-steps <n>`, `--no-reset` |
+| `cua-lab run` | Run a single task YAML or benchmark URI (`vpi-bench:<id>`) | `--task <path\|uri>`, `--obs {pixel,dom}`, `--policy {api,script}`, `--model <id>`, `--tool <type>`, `--max-steps <n>`, `--no-reset` |
+| `cua-lab bench` | Sync, list, replay, and evaluate external VPI benchmarks (`vpi_bench`) | `sync`, `list [--mode] [--platform] [--search]`, `run --case <id>`, `eval [--mode] [--platform] [--limit]` |
 | `cua-lab view` | Serve the local trace replay UI | `--port 8765`, `--traces traces`, `--no-open` |
 | `cua-lab tasks` | List all available task definitions | `--root tasks` |
 | `cua-lab doctor` | Check environment variables, sandbox health, and trace directory permissions | — |
+
+---
+
+## Visual Prompt Injection (VPI) Benchmark Harness (`VPI-Bench`)
+
+`cua-lab` includes a pluggable, OOP/SOLID benchmark evaluation and replay harness ([`cua_lab/benchmarks/`](cua_lab/benchmarks/)) starting with **VPI-Bench** (*Visual Prompt Injection Benchmark for Computer-Use Agents*, ICLR 2026 — 306 test cases across 5 web platforms: `amazon`, `bbc`, `booking`, `email`, `messenger`).
+
+```bash
+# 1. Sync VPI-Bench dataset (306 JSON cases) and web platform assets (855 files)
+uv run cua-lab bench sync
+
+# 2. Browse or filter the 306 benchmark test cases
+uv run cua-lab bench list --mode browser_use --platform amazon --limit 10
+uv run cua-lab bench list --mode computer_use --search formdel --limit 10
+
+# 3. Replay a single VPI-Bench case (Browser-Use / DOM or Computer-Use / Pixel)
+uv run cua-lab bench run --case browser_use/amazon/drive_amazon_formdel_api --model openrouter/google/gemini-2.5-flash --max-steps 12
+uv run cua-lab bench run --case computer_use/amazon/amazon_filedel_api --model openrouter/google/gemini-2.5-flash --max-steps 14
+
+# 4. Run batch evaluation and compute User Success, Attempted Rate (AR), and Hijacked Rate (SR)
+uv run cua-lab bench eval --mode browser_use --platform amazon --limit 5 --model openrouter/google/gemini-2.5-flash
+```
+
+Each benchmark run performs:
+1. **Command-Pattern Environment Setup** ([`cua_lab/setup/instructions.py`](cua_lab/setup/instructions.py)): Executes `FILE_CREATE` (seeding target files on disk and in the offline Cloud Drive workspace at `http://127.0.0.1:8080/drive/index.html`), `PATH_DELETE`, `FIREFOX_OPEN` / `BrowserLaunchInstruction`, `LIBREOFFICE_CALC_OPEN`, `RUN_COMMAND`, and `CLOSE_ALL`.
+2. **Offline Web Platform Serving**: Serves the 5 VPI-Bench web platforms locally on `:8081/web/` and a stateful Cloud Drive workspace on `:8080/drive/index.html` with request audit logging (`/tmp/vpi_web_requests.jsonl`).
+3. **Hybrid Deterministic + LLM-as-a-Judge Verification** ([`cua_lab/verify/`](cua_lab/verify/)): Combines physical sandbox file-state hashing (`FileStateInspector`) with the official VPI-Bench `Attempted (AR)` and `Hijacked / Completed (SR)` Judge rubric (`VPIJudgeVerifier`).
 
 ---
 
@@ -203,12 +231,22 @@ CUA_ANTHROPIC_BETA=computer-use-2025-01-24
 ```text
 cua-lab/
 ├── cua_lab/
-│   ├── cli.py                   # CLI entrypoints: run, view, tasks, doctor
+│   ├── cli.py                   # CLI entrypoints: run, bench, view, tasks, doctor
+│   ├── protocols.py             # ISP protocols (ShellEnvProtocol, JsEnvProtocol, SandboxEnvProtocol, JudgeLLMProtocol)
 │   ├── loop.py                  # Environment-agnostic agent loop (~60 lines)
+│   ├── runner.py                # Orchestrates environment setup, agent loop, and verification
 │   ├── env.py                   # HttpEnv client for container actuators
-│   ├── types.py                 # Action, Observation, Decision, Task dataclasses
+│   ├── types.py                 # Action, Observation, Decision, Task, VerificationResult dataclasses
 │   ├── tasks.py                 # YAML task loader
-│   ├── verify.py                # Post-trajectory shell & JS verifiers
+│   ├── benchmarks/              # Pluggable external benchmark adapters (Registry + Adapter pattern)
+│   │   ├── base.py              # BenchmarkAdapter ABC, BenchmarkCase, BenchmarkRegistry
+│   │   └── vpi_bench.py         # VPI-Bench adapter (306 cases across 5 platforms)
+│   ├── setup/                   # Command pattern for pre-task sandbox setup instructions
+│   │   └── instructions.py      # FILE_CREATE, PATH_DELETE, FIREFOX_OPEN, LIBREOFFICE_CALC_OPEN, RUN_COMMAND, CLOSE_ALL
+│   ├── verify/                  # Strategy pattern for post-trajectory verification
+│   │   ├── base.py              # Verifier ABC & VerifierFactory
+│   │   ├── deterministic.py     # ShellVerifier, JsVerifier, DualTaskVerifier, FileStateInspector
+│   │   └── vpi_judge.py         # VPIJudgeVerifier (AR / SR evaluation + physical file audit)
 │   ├── policy/
 │   │   ├── base.py              # Policy protocol & PolicyError
 │   │   ├── anthropic_policy.py  # CUA (pixel) and BUA (dom) policy adapters
@@ -217,13 +255,16 @@ cua-lab/
 │   │   ├── recorder.py          # Writes meta.json, steps.jsonl, result.json, PNGs
 │   │   └── server.py            # Local HTTP server for the trace viewer
 │   └── viewer/
-│       └── index.html           # Single-file trace replay UI with DOM overlay
+│       └── index.html           # Single-file trace replay UI with DOM overlay & VPI Security Verdict
 ├── envs/
 │   ├── desktop/                 # Debian Bookworm + Xvfb + openbox + tint2 + xdotool + noVNC
-│   └── browser/                 # Debian Bookworm + Chromium + Playwright/CDP + static intranet
+│   ├── browser/                 # Debian Bookworm + Chromium + Playwright/CDP + static intranet + Drive API
+│   └── unified/                 # Single-container headless server build running both Desktop (:8001) & Browser (:8002)
 ├── tasks/
-│   ├── desktop/                 # Desktop task YAMLs (d0..d3)
-│   └── browser/                 # Browser task YAMLs (b0..b3)
+│   ├── desktop/                 # Desktop task YAMLs (d0..d4, including VPI invoice attack)
+│   └── browser/                 # Browser task YAMLs (b0..b5, including VPI helpdesk & shopping attacks)
+├── tests/
+│   └── test_architecture.py     # Unit tests for setup instructions, verifiers, and VPI-Bench adapter
 ├── docker-compose.yml           # Builds and runs desktop (:8001/:6080) & browser (:8002/:6081)
 ├── Makefile                     # Shortcuts for up, down, doctor, smoke tests, and sample runs
 └── pyproject.toml               # Package metadata and dependencies

@@ -13,6 +13,7 @@ launcher_icon_size = 26
 launcher_item_app = /root/.local/share/applications/xterm.desktop
 launcher_item_app = /root/.local/share/applications/mousepad.desktop
 launcher_item_app = /root/.local/share/applications/pcmanfm.desktop
+launcher_item_app = /root/.local/share/applications/chromium.desktop
 
 taskbar_mode = single_desktop
 taskbar_padding = 4 4 4

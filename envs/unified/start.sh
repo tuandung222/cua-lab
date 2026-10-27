@@ -30,7 +30,10 @@ fi
 
 DISPLAY=:98 openbox >/tmp/openbox98.log 2>&1 &
 sleep 0.3
-python3 -m http.server 8080 --directory /srv/site >/tmp/site.log 2>&1 &
+python3 /opt/site_server.py >/tmp/site.log 2>&1 &
+if [ -d /srv/vpi_web ]; then
+  python3 -m http.server 8081 --directory /srv/vpi_web >/tmp/vpi_web.log 2>&1 &
+fi
 
 rm -f /tmp/chromium/Singleton*
 DISPLAY=:98 chromium \

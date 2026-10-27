@@ -122,6 +122,36 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="cua-lab browser actuator", lifespan=lifespan)
 
 
+async def ensure_page():
+    browser = STATE.get("browser")
+    if browser is None or not browser.is_connected() or not browser.contexts:
+        subprocess.run(
+            "curl -fsS http://127.0.0.1:9222/json/version >/dev/null 2>&1 || ("
+            "rm -f /tmp/chromium/Singleton* && "
+            "nohup chromium --no-sandbox --disable-dev-shm-usage --disable-gpu "
+            "--user-data-dir=/tmp/chromium --remote-debugging-port=9222 "
+            "\"--remote-allow-origins=*\" --no-first-run --no-default-browser-check "
+            "--disable-features=Translate,MediaRouter,OptimizationHints "
+            "--window-position=0,0 --window-size=1280,800 --start-maximized "
+            "http://127.0.0.1:8080/ >/tmp/chromium.log 2>&1 </dev/null & sleep 1.5)",
+            shell=True,
+        )
+        for _ in range(20):
+            try:
+                browser = await STATE["pw"].chromium.connect_over_cdp("http://127.0.0.1:9222")
+                STATE["browser"] = browser
+                break
+            except Exception:
+                await asyncio.sleep(0.3)
+    ctx = STATE["browser"].contexts[0] if STATE["browser"].contexts else await STATE["browser"].new_context()
+    pages = [p for p in ctx.pages if not p.is_closed()]
+    if not pages:
+        new_p = await ctx.new_page()
+        await new_p.goto("http://127.0.0.1:8080/", wait_until="domcontentloaded", timeout=15000)
+        return new_p
+    return pages[-1]
+
+
 def page():
     ctx = STATE["browser"].contexts[0]
     pages = [p for p in ctx.pages if not p.is_closed()]
@@ -308,7 +338,7 @@ def health() -> dict:
 async def observe(body: ObserveIn) -> dict:
     assert LOCK is not None
     async with LOCK:
-        p = page()
+        p = await ensure_page()
         png, changed = await settle(p, STATE.get("png"))
         STATE["png"] = png
         w, h = Image.open(io.BytesIO(png)).size
@@ -337,7 +367,8 @@ async def act(body: ActIn) -> dict:
     assert LOCK is not None
     try:
         async with LOCK:
-            await dispatch(page(), body.action)
+            p = await ensure_page()
+            await dispatch(p, body.action)
         return {"ok": True}
     except Exception as exc:  # noqa: BLE001 - surfaced to the trace
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"[:500]}
@@ -348,7 +379,8 @@ async def evaluate(body: EvalIn) -> dict:
     assert LOCK is not None
     async with LOCK:
         try:
-            return {"result": await page().evaluate(body.expr)}
+            p = await ensure_page()
+            return {"result": await p.evaluate(body.expr)}
         except Exception as exc:  # noqa: BLE001
             return {"error": f"{type(exc).__name__}: {exc}"[:500]}
 
@@ -363,14 +395,21 @@ def exec_cmd(body: ExecIn) -> dict:
 async def reset_env() -> dict:
     assert LOCK is not None
     async with LOCK:
+        p = await ensure_page()
         ctx = STATE["browser"].contexts[0]
-        pages = [p for p in ctx.pages if not p.is_closed()]
+        pages = [pg for pg in ctx.pages if not pg.is_closed()]
         for extra in pages[1:]:
             try:
                 await extra.close()
             except Exception:  # noqa: BLE001
                 pass
-        p = page()
+        p = await ensure_page()
+        subprocess.run(
+            "rm -rf /srv/site/drive_files/* /tmp/vpi_web_requests.jsonl 2>/dev/null || true; "
+            "mkdir -p /srv/site/drive_files /home/computeruse/files /home/computeruse/Downloads",
+            shell=True,
+            timeout=5,
+        )
         await p.goto("http://127.0.0.1:8080/", wait_until="domcontentloaded", timeout=15000)
         await p.evaluate("() => { window.scrollTo(0, 0); localStorage.clear(); sessionStorage.clear(); }")
         STATE["png"] = None

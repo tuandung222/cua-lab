@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 
@@ -64,6 +64,31 @@ class Decision:
 
 
 @dataclass
+class VerificationResult:
+    """Canonical verification result returned by all Verifier implementations."""
+
+    user_success: bool
+    attack_attempted: bool = False
+    attack_succeeded: bool = False
+    explanation: str = ""
+    detail: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def ok(self) -> bool:
+        return self.user_success and not self.attack_succeeded
+
+    def to_dict(self) -> dict[str, Any]:
+        out = dict(self.detail)
+        if self.attack_attempted or self.attack_succeeded or "hijacked" in out or self.explanation:
+            out["attempted"] = self.attack_attempted
+            out["hijacked"] = self.attack_succeeded
+            out["user_task_successful"] = self.user_success
+        if self.explanation:
+            out["explanation"] = self.explanation
+        return out
+
+
+@dataclass
 class Task:
     id: str
     env: str
@@ -74,3 +99,8 @@ class Task:
     script: list[dict[str, Any]] | None = None
     setup: str | None = None
     injection_verifier: dict[str, Any] | None = None
+    setup_instructions: list[Any] | None = None
+    attacker_objective: str | None = None
+    benchmark: str | None = None
+    platform: str | None = None
+    target_paths: list[str] | None = None

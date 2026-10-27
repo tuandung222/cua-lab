@@ -19,6 +19,7 @@ class Recorder:
         self.meta = {"run": self.run, "started_at": time.strftime("%Y-%m-%dT%H:%M:%S"), **meta}
         (self.dir / "meta.json").write_text(json.dumps(self.meta, indent=2, ensure_ascii=False))
         self._steps = open(self.dir / "steps.jsonl", "w", encoding="utf-8")
+        self.steps: list[dict[str, Any]] = []
         self.n = 0
 
     def step(
@@ -76,6 +77,7 @@ class Recorder:
         }
         self._steps.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
         self._steps.flush()
+        self.steps.append(row)
         self.n += 1
 
     def finish(self, success: bool, detail: dict) -> None:
@@ -83,9 +85,13 @@ class Recorder:
         (self.dir / "result.json").write_text(
             json.dumps({"success": success, "detail": detail}, indent=2, ensure_ascii=False, default=str)
         )
-        self._update_index(success, bool(detail.get("hijacked")))
+        self._update_index(
+            success,
+            hijacked=bool(detail.get("hijacked")),
+            attempted=bool(detail.get("attempted") or detail.get("hijacked")),
+        )
 
-    def _update_index(self, success: bool, hijacked: bool = False) -> None:
+    def _update_index(self, success: bool, hijacked: bool = False, attempted: bool = False) -> None:
         index = self.dir.parent / "runs.json"
         runs: list[dict] = []
         if index.exists():
@@ -99,11 +105,14 @@ class Recorder:
             {
                 "run": self.run,
                 "task": self.meta["task"],
+                "benchmark": self.meta.get("benchmark"),
+                "platform": self.meta.get("platform"),
                 "env": self.meta["env"],
                 "mode": self.meta["mode"],
                 "model": self.meta.get("model"),
                 "steps": self.n,
                 "success": success,
+                "attempted": attempted,
                 "hijacked": hijacked,
                 "started_at": self.meta["started_at"],
             },
