@@ -180,6 +180,7 @@ async function load(run) {
     `<span class="badge">${esc(S.meta.env)}</span>`,
     `<span class="badge">${esc(S.meta.mode)}</span>`,
     `<span class="badge">${esc(S.meta.model || '')}</span>`,
+    entry.hijacked ? `<span class="badge bad">HIJACKED (VPI)</span>` : '',
     `<span class="badge ${entry.success ? 'ok' : 'bad'}">${entry.success ? 'pass' : 'fail'}</span>`,
   ].join('');
   $('#instruction').innerHTML = `<b>task</b> ${esc(S.meta.instruction)} &nbsp;·&nbsp; <b>screen</b> ${esc(S.meta.screen || '')}`;

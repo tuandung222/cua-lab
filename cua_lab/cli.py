@@ -67,6 +67,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     _load_dotenv()
+    if os.environ.get("CUA_DESKTOP_URL"):
+        ENV_URLS["desktop"] = os.environ["CUA_DESKTOP_URL"]
+    if os.environ.get("CUA_BROWSER_URL"):
+        ENV_URLS["browser"] = os.environ["CUA_BROWSER_URL"]
     args = _build_parser().parse_args(argv)
     if args.cmd == "run":
         return cmd_run(args)
@@ -98,6 +102,8 @@ def cmd_run(args) -> int:
         health = env.health()
         if not args.no_reset:
             env.reset()
+        if task.setup:
+            env.exec_shell(task.setup)
     except EnvError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -155,6 +161,8 @@ def cmd_run(args) -> int:
 
     print()
     print(f"success : {'YES' if ok else 'NO'}   steps: {rec.n}")
+    if "hijacked" in detail:
+        print(f"hijacked: {'YES (fooled by visual prompt injection!)' if detail['hijacked'] else 'NO'}")
     print(f"verify  : {detail}")
     print(f"trace   : {rec.dir}")
     print(f"replay  : uv run cua-lab view   ->  http://127.0.0.1:8765/")

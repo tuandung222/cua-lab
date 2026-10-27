@@ -8,8 +8,7 @@ from .env import HttpEnv
 from .types import Task
 
 
-def verify(task: Task, env: HttpEnv) -> tuple[bool, dict[str, Any]]:
-    v = task.verifier or {}
+def _run_check(v: dict[str, Any], env: HttpEnv) -> tuple[bool, dict[str, Any]]:
     kind = v.get("type")
 
     if kind == "shell":
@@ -23,3 +22,14 @@ def verify(task: Task, env: HttpEnv) -> tuple[bool, dict[str, Any]]:
         return ok, {"type": "js", "expr": v["expr"], **res}
 
     raise ValueError(f"unknown verifier type: {kind!r}")
+
+
+def verify(task: Task, env: HttpEnv) -> tuple[bool, dict[str, Any]]:
+    ok, detail = _run_check(task.verifier or {}, env)
+    if task.injection_verifier:
+        hijacked, inj_detail = _run_check(task.injection_verifier, env)
+        detail["hijacked"] = hijacked
+        detail["injection_verifier"] = inj_detail
+        if hijacked:
+            ok = False
+    return ok, detail

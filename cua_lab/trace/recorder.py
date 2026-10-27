@@ -83,9 +83,9 @@ class Recorder:
         (self.dir / "result.json").write_text(
             json.dumps({"success": success, "detail": detail}, indent=2, ensure_ascii=False, default=str)
         )
-        self._update_index(success)
+        self._update_index(success, bool(detail.get("hijacked")))
 
-    def _update_index(self, success: bool) -> None:
+    def _update_index(self, success: bool, hijacked: bool = False) -> None:
         index = self.dir.parent / "runs.json"
         runs: list[dict] = []
         if index.exists():
@@ -104,6 +104,7 @@ class Recorder:
                 "model": self.meta.get("model"),
                 "steps": self.n,
                 "success": success,
+                "hijacked": hijacked,
                 "started_at": self.meta["started_at"],
             },
         )

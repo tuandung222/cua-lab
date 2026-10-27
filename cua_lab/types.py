@@ -72,3 +72,5 @@ class Task:
     max_steps: int = 15
     obs: str | None = None
     script: list[dict[str, Any]] | None = None
+    setup: str | None = None
+    injection_verifier: dict[str, Any] | None = None

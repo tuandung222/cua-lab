@@ -24,15 +24,17 @@ from .base import PolicyError
 
 CURRENT_TOOL = "computer_toolset_20260801"
 LEGACY_TOOL = "computer_20250124"
+FUNCTION_TOOL = "function"
 
 DESKTOP_SYSTEM = """You are an agent controlling a Linux desktop through a computer-use tool.
 
 Rules:
 - The screenshot is exactly {w}x{h} pixels. Coordinates are pixel positions on that image, origin at top-left.
 - Act one step at a time; the next screenshot shows the result of your action.
+- Always click an input field or window to focus it before calling `type`.
 - Prefer keyboard input over mouse when it is more reliable (e.g. typing a path in a dialog).
 - Never ask the user questions and never explain in prose. Call a tool.
-- When the task is complete, reply with one short sentence and no tool call.
+- When the task is complete, reply with one short sentence and no tool call (or call action=finish).
 """
 
 BROWSER_SYSTEM = """You are an agent controlling a Chromium browser through a structured browser tool.
@@ -65,6 +67,54 @@ BROWSER_TOOL: dict[str, Any] = {
             "amount": {"type": "integer", "description": "Scroll amount in wheel notches."},
             "duration": {"type": "number", "description": "Wait duration in seconds."},
             "submit": {"type": "boolean", "description": "Press Enter after typing."},
+            "note": {"type": "string", "description": "One short sentence of reasoning."},
+        },
+        "required": ["action"],
+    },
+}
+
+COMPUTER_FUNCTION_TOOL: dict[str, Any] = {
+    "name": "computer",
+    "description": (
+        "Control the screen using pixel coordinates (x, y) on the latest screenshot. "
+        "Actions: left_click, double_click, right_click, mouse_move, left_click_drag, type, key, scroll, wait, screenshot, finish."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "action": {
+                "type": "string",
+                "enum": [
+                    "left_click",
+                    "double_click",
+                    "right_click",
+                    "mouse_move",
+                    "left_click_drag",
+                    "type",
+                    "key",
+                    "scroll",
+                    "wait",
+                    "screenshot",
+                    "finish",
+                ],
+            },
+            "coordinate": {
+                "type": "array",
+                "items": {"type": "integer"},
+                "description": "[x, y] pixel coordinates on the screenshot (origin at top-left).",
+            },
+            "start_coordinate": {
+                "type": "array",
+                "items": {"type": "integer"},
+                "description": "[x, y] start coordinates for left_click_drag.",
+            },
+            "text": {
+                "type": "string",
+                "description": "Text to type (for action=type) or key combo like 'Return' or 'ctrl+s' (for action=key).",
+            },
+            "scroll_direction": {"type": "string", "enum": ["up", "down", "left", "right"]},
+            "scroll_amount": {"type": "integer", "description": "Scroll amount in wheel notches."},
+            "duration": {"type": "number", "description": "Wait duration in seconds."},
             "note": {"type": "string", "description": "One short sentence of reasoning."},
         },
         "required": ["action"],
@@ -122,9 +172,13 @@ class AnthropicPolicy:
 
         self.mode = mode
         self.model = model or os.environ.get("CUA_MODEL", "claude-sonnet-5-5")
-        self.tool = tool or os.environ.get("CUA_TOOL", CURRENT_TOOL)
-        self.beta = beta or os.environ.get("CUA_ANTHROPIC_BETA") or (
-            "computer-use-2025-01-24" if self.tool == LEGACY_TOOL else None
+        is_claude = "claude" in self.model.lower()
+        default_tool = os.environ.get("CUA_TOOL", CURRENT_TOOL) if is_claude else FUNCTION_TOOL
+        self.tool = tool or default_tool
+        self.beta = beta or (
+            os.environ.get("CUA_ANTHROPIC_BETA") or ("computer-use-2025-01-24" if self.tool == LEGACY_TOOL else None)
+            if is_claude
+            else None
         )
         self.max_tokens = max_tokens
         self.keep_images = os.environ.get("CUA_KEEP_IMAGES", "0") == "1"
@@ -169,6 +223,8 @@ class AnthropicPolicy:
     def _build_tools(self, obs: Observation) -> list[dict[str, Any]]:
         if self.mode == "dom":
             return [BROWSER_TOOL]
+        if self.tool == FUNCTION_TOOL:
+            return [COMPUTER_FUNCTION_TOOL]
         if self.tool == LEGACY_TOOL:
             return [
                 {

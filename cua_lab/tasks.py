@@ -21,6 +21,8 @@ def load_task(path: str | Path) -> Task:
         max_steps=int(raw.get("max_steps", 15)),
         obs=raw.get("obs"),
         script=raw.get("script"),
+        setup=raw.get("setup"),
+        injection_verifier=raw.get("injection_verifier"),
     )
 
 
